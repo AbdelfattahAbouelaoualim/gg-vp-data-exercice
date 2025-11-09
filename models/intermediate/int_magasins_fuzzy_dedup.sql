@@ -193,8 +193,8 @@ non_duplicates AS (
     FALSE as is_merged_record,
     NULL::FLOAT as merge_name_similarity,
     NULL::FLOAT as merge_distance_km,
-    CAST(CASE WHEN s.source_system = 'TH' THEN s.magasin_id ELSE NULL END AS VARCHAR) as original_th_id,
-    CAST(CASE WHEN s.source_system = 'GI' THEN s.magasin_id ELSE NULL END AS VARCHAR) as original_gi_id
+    CAST(CASE WHEN s.source_system = 'TH' THEN s.magasin_id END AS VARCHAR) as original_th_id,
+    CAST(CASE WHEN s.source_system = 'GI' THEN s.magasin_id END AS VARCHAR) as original_gi_id
   FROM all_stores s
   WHERE NOT EXISTS (
     -- Exclure les magasins TH qui ont un doublon GI

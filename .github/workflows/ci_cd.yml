@@ -34,7 +34,7 @@ jobs:
 
       - name: Run sqlfluff lint
         run: |
-          sqlfluff lint models/ --dialect snowflake --exclude-rules LT05,LT02
+          sqlfluff lint models/ --dialect snowflake
 
       - name: Comment PR with lint results
         if: failure() && github.event_name == 'pull_request'
