@@ -559,6 +559,23 @@ ORDER BY total_credits DESC;
 
 **⚠️ Point Critique:** Aucun humain n'a d'accès écriture direct en PROD. Tous les déploiements passent par CI/CD avec approbation manuelle.
 
+> **📝 Note de Configuration Simplifiée (Exercice)**
+>
+> Dans cet exercice, pour simplifier la configuration initiale, nous utilisons **le même compte Snowflake** pour les déploiements DEV et PROD via GitHub Actions (au lieu de créer des service accounts dédiés `DBT_RUNNER` et `FLYWAY_DEPLOYER`).
+>
+> **Configuration locale** : Les credentials Snowflake sont stockés dans `.envrc` (ignoré par Git via `.gitignore`) et chargés automatiquement par `direnv`. Le fichier `~/.dbt/profiles.yml` utilise ces variables d'environnement.
+>
+> **Configuration GitHub Actions** : Les mêmes credentials sont stockés dans les GitHub Secrets (7 secrets au total) et utilisés par le workflow CI/CD pour les déploiements DEV et PROD.
+>
+> **Sécurité maintenue par** :
+> - ✅ **Approbation manuelle obligatoire** pour tout déploiement PROD (GitHub Environment `production`)
+> - ✅ **Séparation stricte des databases** : `DWH_DEV_ABDELFATTAH` vs `DWH_PROD_ABDELFATTAH`
+> - ✅ **Workflow CI/CD avec gates** : lint → test → approval → deploy
+> - ✅ **Audit trail complet** via Git + GitHub Actions logs
+> - ✅ **Credentials sécurisés** : `.envrc` ignoré par Git, secrets chiffrés sur GitHub
+>
+> **⚠️ En Production Réelle** : Suivez les bonnes pratiques décrites ci-dessous en créant des **service accounts dédiés** avec rôles spécifiques (`DBT_RUNNER`, `FLYWAY_DEPLOYER`), rotation de credentials, et MFA obligatoire. Voir section "Implémentation RBAC" pour les scripts complets.
+
 **C'est quoi ?**
 
 La **Matrice d'Accès** est un tableau de référence qui spécifie **exactement** qui peut faire quoi sur chaque schéma dans chaque environnement. C'est le contrat de sécurité du projet.

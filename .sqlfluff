@@ -1,0 +1,40 @@
+[sqlfluff]
+# ============================================
+# SQLFluff Configuration - dbt + Snowflake
+# ============================================
+
+# Templater: dbt (requires sqlfluff-templater-dbt installed in CI/CD)
+templater = dbt
+dialect = snowflake
+
+# File encoding
+encoding = utf-8
+
+# Max line length
+max_line_length = 120
+
+# Exclude rules that are too strict or cause issues with dbt/Jinja
+# LT05: Long lines (too strict)
+# LT02: Indentation (too strict)
+# LT03: Operator placement (too opinionated)
+# CP01: Keyword capitalization (too strict, dbt uses lowercase keywords)
+# ST02: CASE vs COALESCE (too opinionated)
+# ST06: Column order (too opinionated)
+# AL01: Table aliasing (too strict)
+# CV11: Causes internal errors (bug in rule)
+exclude_rules = LT05,LT02,LT03,CP01,ST02,ST06,AL01,CV11
+
+# ============================================
+# dbt Templater Configuration
+# ============================================
+[sqlfluff:templater:dbt]
+project_dir = ./
+profiles_dir = ~/.dbt/
+target = dev
+
+# ============================================
+# Indentation
+# ============================================
+[sqlfluff:indentation]
+indent_unit = space
+tab_space_size = 4
