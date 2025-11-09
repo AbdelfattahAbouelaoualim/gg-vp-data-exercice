@@ -59,18 +59,6 @@ jobs:
         run: |
           sqlfluff lint models/ --dialect snowflake
 
-      - name: Comment PR with lint results
-        if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '❌ **sqlfluff lint failed**. Please fix SQL formatting errors.'
-            })
-
   test-dev:
     name: Test on DEV environment
     runs-on: ubuntu-latest
@@ -125,19 +113,6 @@ jobs:
 
       - name: dbt test
         run: dbt test --target dev
-
-      - name: Comment PR with test results
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `${status} **DEV tests ${status === '✅' ? 'passed' : 'failed'}**`
-            })
 
   deploy-dev:
     name: Deploy to DEV
