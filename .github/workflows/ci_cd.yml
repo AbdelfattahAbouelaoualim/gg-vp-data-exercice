@@ -121,7 +121,7 @@ jobs:
         run: dbt seed --target dev
 
       - name: dbt run
-        run: dbt run --target dev
+        run: dbt run --target dev --full-refresh
 
       - name: dbt test
         run: dbt test --target dev
