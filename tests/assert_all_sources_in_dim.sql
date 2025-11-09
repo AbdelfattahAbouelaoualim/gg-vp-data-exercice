@@ -1,5 +1,5 @@
 -- Test: Ensure all source stores are present in dimension
--- Description: Verify that every store from staging appears in dim_magasin
+-- Description: Verify that every store from fuzzy dedup appears in dim_magasin
 --              with is_current = TRUE
 -- Severity: error (critical data completeness)
 
@@ -7,7 +7,7 @@ WITH source_stores AS (
     SELECT DISTINCT
         magasin_id,
         source_system
-    FROM {{ ref('int_magasins_merged') }}
+    FROM {{ ref('int_magasins_fuzzy_dedup') }}
 ),
 
 dim_current_stores AS (
