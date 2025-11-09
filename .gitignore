@@ -27,6 +27,7 @@ build/
 target/
 dbt_packages/
 logs/
+logs_gg_vp_data/
 dbt_modules/
 
 # ============================================
