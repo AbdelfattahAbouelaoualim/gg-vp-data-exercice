@@ -99,8 +99,7 @@ new_versions AS (
     SELECT
         {{ dbt_utils.generate_surrogate_key([
             'magasin_id',
-            'source_system',
-            'loaded_at'
+            'source_system'
         ]) }} AS magasin_key,
         magasin_id,
         nom_magasin,
@@ -137,8 +136,7 @@ SELECT * FROM final_incremental
 SELECT
     {{ dbt_utils.generate_surrogate_key([
         'magasin_id',
-        'source_system',
-        'loaded_at'
+        'source_system'
     ]) }} AS magasin_key,
     magasin_id,
     nom_magasin,
