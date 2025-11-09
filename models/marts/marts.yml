@@ -1,0 +1,145 @@
+version: 2
+
+models:
+  - name: dim_magasin
+    description: |
+      Dimension magasin unique et historisée (SCD Type 2).
+
+      Combine les sources TH (186k magasins) et GI (33k magasins) en une dimension consolidée
+      avec enrichissement géographique via le référentiel communes France 2025.
+
+      **Type**: SCD Type 2 (Slowly Changing Dimension)
+      **Matérialisation**: Incremental table
+      **Granularité**: Un enregistrement par (magasin_id, source_system, valid_from)
+      **Historisation**: Conserve toutes les versions de chaque magasin avec valid_from/valid_to
+
+      **Critères de changement détectés**:
+      - Changement nom_magasin
+      - Changement latitude
+      - Changement longitude
+      - Changement coords_dans_plage_france
+
+      **Enrichissement**:
+      - Matching fuzzy par similarité de nom (EDITDISTANCE > 0.3)
+      - Validation GPS avec distance Haversine
+      - Métadonnées administratives (commune, département, région)
+
+    config:
+      tags: ['marts', 'dimension', 'scd_type_2']
+
+    tests:
+      # Test volumétrie
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 200000
+          max_value: 250000
+          severity: warn
+
+    columns:
+      - name: magasin_key
+        description: |
+          Clé surrogate unique pour chaque version du magasin.
+          Générée par MD5(magasin_id || source_system || loaded_at).
+        tests:
+          - not_null
+          - unique
+
+      - name: magasin_id
+        description: |
+          Identifiant métier du magasin (provenant de TH.id ou GI.id).
+          Non unique car un magasin peut avoir plusieurs versions historiques.
+        tests:
+          - not_null
+
+      - name: nom_magasin
+        description: 'Nom du magasin (ex: FNAC PARIS BASTILLE)'
+        tests:
+          - not_null
+
+      - name: latitude
+        description: Latitude GPS en degrés décimaux (WGS84)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 41.0
+              max_value: 51.5
+              severity: warn
+              config:
+                where: "coords_dans_plage_france = TRUE"
+
+      - name: longitude
+        description: Longitude GPS en degrés décimaux (WGS84)
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: -5.5
+              max_value: 10.0
+              severity: warn
+              config:
+                where: "coords_dans_plage_france = TRUE"
+
+      - name: source_system
+        description: Système source d'origine ('TH' ou 'GI')
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['TH', 'GI']
+
+      - name: commune_nom
+        description: |
+          Nom de la commune française matchée par similarité de nom.
+          NULL si aucun match trouvé (similarity < 0.3).
+
+      - name: code_postal
+        description: Code postal de la commune matchée
+
+      - name: dep_nom
+        description: 'Nom du département (ex: Paris, Bouches-du-Rhône)'
+
+      - name: reg_nom
+        description: 'Nom de la région (ex: Île-de-France, Provence-Alpes-Côte d''Azur)'
+
+      - name: coords_dans_plage_france
+        description: |
+          Flag booléen indiquant si les coordonnées GPS sont dans les plages valides
+          pour la France métropolitaine (41-51.5°N, -5.5-10°E).
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_in_set:
+              value_set: [true, false]
+
+      - name: match_fiable
+        description: |
+          Flag booléen indiquant si le matching commune est fiable:
+          - similarity >= 0.7 (70% de similarité de nom)
+          - distance <= 50 km (distance Haversine acceptable)
+        tests:
+          - not_null
+
+      - name: coords_correction_requise
+        description: |
+          Flag booléen indiquant si les coordonnées nécessitent une correction manuelle.
+          TRUE si distance > 50km entre le magasin et la commune matchée.
+        tests:
+          - not_null
+
+      - name: valid_from
+        description: |
+          Date de début de validité de cette version du magasin (SCD Type 2).
+          Généralement égal à CURRENT_TIMESTAMP() lors de la première insertion.
+        tests:
+          - not_null
+
+      - name: valid_to
+        description: |
+          Date de fin de validité de cette version (SCD Type 2).
+          NULL pour la version courante (is_current = TRUE).
+          Non-NULL pour les versions historiques.
+
+      - name: is_current
+        description: |
+          Flag booléen indiquant si c'est la version courante du magasin.
+          TRUE = version actuelle, FALSE = version historique.
+        tests:
+          - not_null
+          - accepted_values:
+              values: [true, false]

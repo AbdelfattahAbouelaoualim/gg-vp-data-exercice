@@ -1,0 +1,54 @@
+version: 2
+
+sources:
+  - name: th
+    description: "Source TH - 186 992 magasins"
+    database: DTL_EXO
+    schema: TH
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    tables:
+      - name: magasins
+        description: "Table magasins TH avec coordonnées GPS en FLOAT"
+        loaded_at_field: "_loaded_at"  # Assuming this column exists or will be added
+        columns:
+          - name: id
+            description: "Identifiant unique du magasin"
+            tests:
+              - not_null
+              - unique
+          - name: name
+            description: "Nom du magasin"
+            tests:
+              - not_null
+          - name: latitude
+            description: "Latitude GPS (FLOAT)"
+          - name: longitude
+            description: "Longitude GPS (FLOAT)"
+
+  - name: gi
+    description: "Source GI - 33 841 magasins"
+    database: DTL_EXO
+    schema: GI
+    freshness:
+      warn_after: {count: 12, period: hour}
+      error_after: {count: 24, period: hour}
+    tables:
+      - name: magasins
+        description: "Table magasins GI avec coordonnées GPS en NUMBER(38,18)"
+        loaded_at_field: "_loaded_at"  # Assuming this column exists or will be added
+        columns:
+          - name: id
+            description: "Identifiant unique du magasin"
+            tests:
+              - not_null
+              - unique
+          - name: name
+            description: "Nom du magasin"
+            tests:
+              - not_null
+          - name: latitude
+            description: "Latitude GPS (NUMBER)"
+          - name: longitude
+            description: "Longitude GPS (NUMBER)"

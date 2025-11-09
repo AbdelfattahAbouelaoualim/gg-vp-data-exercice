@@ -1,0 +1,261 @@
+-- =====================================================
+-- Flyway Migration V004: Grant Permissions (RBAC)
+-- Description: Apply least privilege principle with granular permissions
+-- Author: Data Engineering Team
+-- Date: 2025-11-08
+-- =====================================================
+
+-- Note: This should be run with SECURITYADMIN or ACCOUNTADMIN role
+
+-- =====================================================
+-- PART 1: Warehouse Grants
+-- =====================================================
+
+-- DATA_ENGINEER: Can use TRANSFORM_WH and ANALYTICS_WH
+GRANT USAGE ON WAREHOUSE TRANSFORM_WH TO ROLE DATA_ENGINEER;
+GRANT USAGE ON WAREHOUSE ANALYTICS_WH TO ROLE DATA_ENGINEER;
+GRANT USAGE ON WAREHOUSE ADMIN_WH TO ROLE DATA_ENGINEER;
+
+-- DATA_ANALYST: Can only use ANALYTICS_WH
+GRANT USAGE ON WAREHOUSE ANALYTICS_WH TO ROLE DATA_ANALYST;
+
+-- PRODUCT_OWNER: Can use ANALYTICS_WH for monitoring
+GRANT USAGE ON WAREHOUSE ANALYTICS_WH TO ROLE PRODUCT_OWNER;
+
+-- CLIENT_VIEWER: Can only use CLIENT_WH (restricted)
+GRANT USAGE ON WAREHOUSE CLIENT_WH TO ROLE CLIENT_VIEWER;
+
+-- DBT_RUNNER: Needs TRANSFORM_WH for transformations
+GRANT USAGE ON WAREHOUSE TRANSFORM_WH TO ROLE DBT_RUNNER;
+
+-- FLYWAY_DEPLOYER: Needs ADMIN_WH for DDL operations
+GRANT USAGE ON WAREHOUSE ADMIN_WH TO ROLE FLYWAY_DEPLOYER;
+
+-- CICD_PIPELINE: Needs TRANSFORM_WH and ADMIN_WH
+GRANT USAGE ON WAREHOUSE TRANSFORM_WH TO ROLE CICD_PIPELINE;
+GRANT USAGE ON WAREHOUSE ADMIN_WH TO ROLE CICD_PIPELINE;
+
+-- =====================================================
+-- PART 2: Database Grants
+-- =====================================================
+
+-- Grant USAGE on databases
+GRANT USAGE ON DATABASE DWH_DEV_ABDELFATTAH TO ROLE DATA_ENGINEER;
+GRANT USAGE ON DATABASE DWH_DEV_ABDELFATTAH TO ROLE DATA_ANALYST;
+GRANT USAGE ON DATABASE DWH_DEV_ABDELFATTAH TO ROLE DBT_RUNNER;
+GRANT USAGE ON DATABASE DWH_DEV_ABDELFATTAH TO ROLE FLYWAY_DEPLOYER;
+GRANT USAGE ON DATABASE DWH_DEV_ABDELFATTAH TO ROLE CICD_PIPELINE;
+
+GRANT USAGE ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE DATA_ENGINEER;
+GRANT USAGE ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE DATA_ANALYST;
+GRANT USAGE ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE PRODUCT_OWNER;
+GRANT USAGE ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE CLIENT_VIEWER;
+GRANT USAGE ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE DBT_RUNNER;
+GRANT USAGE ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE CICD_PIPELINE;
+
+-- Grant USAGE on source database (DTL_EXO) - read-only
+GRANT USAGE ON DATABASE DTL_EXO TO ROLE DATA_ENGINEER;
+GRANT USAGE ON DATABASE DTL_EXO TO ROLE DBT_RUNNER;
+GRANT USAGE ON DATABASE DTL_EXO TO ROLE CICD_PIPELINE;
+
+-- =====================================================
+-- PART 3: Schema Grants - DEV Environment
+-- =====================================================
+
+USE DATABASE DWH_DEV_ABDELFATTAH;
+
+-- DATA_ENGINEER: Full access to all DEV schemas
+GRANT ALL ON SCHEMA staging TO ROLE DATA_ENGINEER;
+GRANT ALL ON SCHEMA intermediate TO ROLE DATA_ENGINEER;
+GRANT ALL ON SCHEMA marts TO ROLE DATA_ENGINEER;
+GRANT ALL ON SCHEMA observability TO ROLE DATA_ENGINEER;
+
+-- DATA_ANALYST: Read-only on marts and observability in DEV
+GRANT USAGE ON SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT USAGE ON SCHEMA observability TO ROLE DATA_ANALYST;
+
+-- DBT_RUNNER: Full access to staging, intermediate, marts (not observability - read-only)
+GRANT ALL ON SCHEMA staging TO ROLE DBT_RUNNER;
+GRANT ALL ON SCHEMA intermediate TO ROLE DBT_RUNNER;
+GRANT ALL ON SCHEMA marts TO ROLE DBT_RUNNER;
+GRANT USAGE ON SCHEMA observability TO ROLE DBT_RUNNER;
+
+-- FLYWAY_DEPLOYER: Can create/alter schemas
+GRANT ALL ON SCHEMA staging TO ROLE FLYWAY_DEPLOYER;
+GRANT ALL ON SCHEMA intermediate TO ROLE FLYWAY_DEPLOYER;
+GRANT ALL ON SCHEMA marts TO ROLE FLYWAY_DEPLOYER;
+GRANT ALL ON SCHEMA observability TO ROLE FLYWAY_DEPLOYER;
+
+-- =====================================================
+-- PART 4: Schema Grants - PROD Environment
+-- =====================================================
+
+USE DATABASE DWH_PROD_ABDELFATTAH;
+
+-- DATA_ENGINEER: Read-only on PROD (no direct writes!)
+GRANT USAGE ON SCHEMA staging TO ROLE DATA_ENGINEER;
+GRANT USAGE ON SCHEMA intermediate TO ROLE DATA_ENGINEER;
+GRANT USAGE ON SCHEMA marts TO ROLE DATA_ENGINEER;
+GRANT USAGE ON SCHEMA observability TO ROLE DATA_ENGINEER;
+
+-- DATA_ANALYST: Read-only on marts and observability
+GRANT USAGE ON SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT USAGE ON SCHEMA observability TO ROLE DATA_ANALYST;
+
+-- PRODUCT_OWNER: Read-only on marts and observability
+GRANT USAGE ON SCHEMA marts TO ROLE PRODUCT_OWNER;
+GRANT USAGE ON SCHEMA observability TO ROLE PRODUCT_OWNER;
+
+-- CLIENT_VIEWER: Read-only on marts only (no observability)
+GRANT USAGE ON SCHEMA marts TO ROLE CLIENT_VIEWER;
+
+-- DBT_RUNNER: Full access to PROD schemas (via CI/CD only)
+GRANT ALL ON SCHEMA staging TO ROLE DBT_RUNNER;
+GRANT ALL ON SCHEMA intermediate TO ROLE DBT_RUNNER;
+GRANT ALL ON SCHEMA marts TO ROLE DBT_RUNNER;
+GRANT USAGE ON SCHEMA observability TO ROLE DBT_RUNNER;
+
+-- FLYWAY_DEPLOYER: Can create/alter schemas in PROD
+GRANT ALL ON SCHEMA staging TO ROLE FLYWAY_DEPLOYER;
+GRANT ALL ON SCHEMA intermediate TO ROLE FLYWAY_DEPLOYER;
+GRANT ALL ON SCHEMA marts TO ROLE FLYWAY_DEPLOYER;
+GRANT ALL ON SCHEMA observability TO ROLE FLYWAY_DEPLOYER;
+
+-- =====================================================
+-- PART 5: Schema Grants - Source (DTL_EXO)
+-- =====================================================
+
+USE DATABASE DTL_EXO;
+
+-- DATA_ENGINEER: Read-only access to source schemas
+GRANT USAGE ON SCHEMA TH TO ROLE DATA_ENGINEER;
+GRANT USAGE ON SCHEMA GI TO ROLE DATA_ENGINEER;
+
+-- DBT_RUNNER: Read-only access to source schemas
+GRANT USAGE ON SCHEMA TH TO ROLE DBT_RUNNER;
+GRANT USAGE ON SCHEMA GI TO ROLE DBT_RUNNER;
+
+-- =====================================================
+-- PART 6: Table/View Grants - DEV
+-- =====================================================
+
+USE DATABASE DWH_DEV_ABDELFATTAH;
+
+-- DATA_ANALYST: Read-only on all existing and future tables/views in marts
+GRANT SELECT ON ALL TABLES IN SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT SELECT ON ALL VIEWS IN SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA marts TO ROLE DATA_ANALYST;
+
+GRANT SELECT ON ALL VIEWS IN SCHEMA observability TO ROLE DATA_ANALYST;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA observability TO ROLE DATA_ANALYST;
+
+-- =====================================================
+-- PART 7: Table/View Grants - PROD
+-- =====================================================
+
+USE DATABASE DWH_PROD_ABDELFATTAH;
+
+-- DATA_ENGINEER: Read-only on all PROD tables
+GRANT SELECT ON ALL TABLES IN SCHEMA staging TO ROLE DATA_ENGINEER;
+GRANT SELECT ON ALL VIEWS IN SCHEMA staging TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA staging TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA staging TO ROLE DATA_ENGINEER;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA intermediate TO ROLE DATA_ENGINEER;
+GRANT SELECT ON ALL VIEWS IN SCHEMA intermediate TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA intermediate TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA intermediate TO ROLE DATA_ENGINEER;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA marts TO ROLE DATA_ENGINEER;
+GRANT SELECT ON ALL VIEWS IN SCHEMA marts TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA marts TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA marts TO ROLE DATA_ENGINEER;
+
+GRANT SELECT ON ALL VIEWS IN SCHEMA observability TO ROLE DATA_ENGINEER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA observability TO ROLE DATA_ENGINEER;
+
+-- DATA_ANALYST: Read-only on marts and observability
+GRANT SELECT ON ALL TABLES IN SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT SELECT ON ALL VIEWS IN SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA marts TO ROLE DATA_ANALYST;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA marts TO ROLE DATA_ANALYST;
+
+GRANT SELECT ON ALL VIEWS IN SCHEMA observability TO ROLE DATA_ANALYST;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA observability TO ROLE DATA_ANALYST;
+
+-- PRODUCT_OWNER: Read-only on marts and observability
+GRANT SELECT ON ALL TABLES IN SCHEMA marts TO ROLE PRODUCT_OWNER;
+GRANT SELECT ON ALL VIEWS IN SCHEMA marts TO ROLE PRODUCT_OWNER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA marts TO ROLE PRODUCT_OWNER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA marts TO ROLE PRODUCT_OWNER;
+
+GRANT SELECT ON ALL VIEWS IN SCHEMA observability TO ROLE PRODUCT_OWNER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA observability TO ROLE PRODUCT_OWNER;
+
+-- CLIENT_VIEWER: Read-only on marts only (restricted to specific tables via future row-level security)
+GRANT SELECT ON ALL TABLES IN SCHEMA marts TO ROLE CLIENT_VIEWER;
+GRANT SELECT ON ALL VIEWS IN SCHEMA marts TO ROLE CLIENT_VIEWER;
+GRANT SELECT ON FUTURE TABLES IN SCHEMA marts TO ROLE CLIENT_VIEWER;
+GRANT SELECT ON FUTURE VIEWS IN SCHEMA marts TO ROLE CLIENT_VIEWER;
+
+-- =====================================================
+-- PART 8: Table/View Grants - Source (DTL_EXO)
+-- =====================================================
+
+USE DATABASE DTL_EXO;
+
+-- DATA_ENGINEER and DBT_RUNNER: Read-only on source tables
+GRANT SELECT ON ALL TABLES IN SCHEMA TH TO ROLE DATA_ENGINEER;
+GRANT SELECT ON ALL TABLES IN SCHEMA GI TO ROLE DATA_ENGINEER;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA TH TO ROLE DBT_RUNNER;
+GRANT SELECT ON ALL TABLES IN SCHEMA GI TO ROLE DBT_RUNNER;
+
+-- =====================================================
+-- PART 9: Verification Queries
+-- =====================================================
+
+-- Show grants for each role
+SHOW GRANTS TO ROLE DATA_ENGINEER;
+SHOW GRANTS TO ROLE DATA_ANALYST;
+SHOW GRANTS TO ROLE PRODUCT_OWNER;
+SHOW GRANTS TO ROLE CLIENT_VIEWER;
+SHOW GRANTS TO ROLE DBT_RUNNER;
+SHOW GRANTS TO ROLE FLYWAY_DEPLOYER;
+SHOW GRANTS TO ROLE CICD_PIPELINE;
+
+-- =====================================================
+-- PART 10: Security Best Practices Notes
+-- =====================================================
+
+/*
+SECURITY PRINCIPLES APPLIED:
+
+1. Least Privilege:
+   - Each role has minimum necessary permissions
+   - Analysts cannot write to any schema
+   - Clients cannot see observability data
+   - Engineers cannot write to PROD directly
+
+2. Separation of Duties:
+   - Flyway handles DDL (CREATE, ALTER, DROP)
+   - DBT handles DML (INSERT, UPDATE, DELETE via transformations)
+   - No human has direct PROD write access
+
+3. Defense in Depth:
+   - Warehouse isolation (CLIENT_WH, ANALYTICS_WH, TRANSFORM_WH)
+   - Schema-level permissions
+   - Table-level permissions
+   - Future grants for new objects
+
+4. Audit Trail:
+   - All CI/CD actions logged via GitHub Actions
+   - Snowflake query history tracks all operations
+   - Flyway tracks all DDL changes
+
+5. Fail-Safe:
+   - PROD deployments require manual approval
+   - Tests run before any PROD deployment
+   - Rollback procedures documented
+*/

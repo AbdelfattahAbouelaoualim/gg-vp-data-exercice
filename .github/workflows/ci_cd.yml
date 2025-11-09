@@ -1,0 +1,278 @@
+name: dbt CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  DBT_PROFILES_DIR: ${{ github.workspace }}
+  SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+  SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
+  SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
+  SNOWFLAKE_ROLE: ${{ secrets.SNOWFLAKE_ROLE }}
+  SNOWFLAKE_WAREHOUSE: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+
+jobs:
+  lint:
+    name: Lint SQL with sqlfluff
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install sqlfluff
+        run: |
+          pip install sqlfluff sqlfluff-templater-dbt
+
+      - name: Run sqlfluff lint
+        run: |
+          sqlfluff lint models/ --dialect snowflake --exclude-rules LT05,LT02
+
+      - name: Comment PR with lint results
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '❌ **sqlfluff lint failed**. Please fix SQL formatting errors.'
+            })
+
+  test-dev:
+    name: Test on DEV environment
+    runs-on: ubuntu-latest
+    needs: lint
+    env:
+      DBT_TARGET: dev
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE_DEV }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install dbt-snowflake==1.10.3
+
+      - name: Create profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<EOF
+          gg_vp_data:
+            target: dev
+            outputs:
+              dev:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ${{ secrets.SNOWFLAKE_ROLE }}
+                database: ${{ secrets.SNOWFLAKE_DATABASE_DEV }}
+                warehouse: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+                schema: staging
+                threads: 4
+          EOF
+
+      - name: dbt deps
+        run: dbt deps
+
+      - name: dbt debug
+        run: dbt debug
+
+      - name: dbt seed
+        run: dbt seed --target dev
+
+      - name: dbt run
+        run: dbt run --target dev
+
+      - name: dbt test
+        run: dbt test --target dev
+
+      - name: Comment PR with test results
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `${status} **DEV tests ${status === '✅' ? 'passed' : 'failed'}**`
+            })
+
+  deploy-dev:
+    name: Deploy to DEV
+    runs-on: ubuntu-latest
+    needs: test-dev
+    if: github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    env:
+      DBT_TARGET: dev
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE_DEV }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install dbt-snowflake==1.10.3
+
+      - name: Create profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<EOF
+          gg_vp_data:
+            target: dev
+            outputs:
+              dev:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ${{ secrets.SNOWFLAKE_ROLE }}
+                database: ${{ secrets.SNOWFLAKE_DATABASE_DEV }}
+                warehouse: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+                schema: staging
+                threads: 4
+          EOF
+
+      - name: Run Flyway migrations (DEV)
+        uses: docker://flyway/flyway:latest
+        with:
+          args: >
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
+            -user=${{ secrets.SNOWFLAKE_USER }}
+            -password=${{ secrets.SNOWFLAKE_PASSWORD }}
+            -locations=filesystem:./flyway/sql
+            -schemas=${{ secrets.SNOWFLAKE_DATABASE_DEV }}.staging,${{ secrets.SNOWFLAKE_DATABASE_DEV }}.intermediate,${{ secrets.SNOWFLAKE_DATABASE_DEV }}.marts
+            migrate
+
+      - name: dbt deps
+        run: dbt deps
+
+      - name: dbt seed
+        run: dbt seed --target dev
+
+      - name: dbt run (full-refresh)
+        run: dbt run --target dev --full-refresh
+
+      - name: dbt test
+        run: dbt test --target dev
+
+      - name: Generate dbt docs
+        run: |
+          dbt docs generate --target dev
+
+      - name: Notify deployment
+        if: success()
+        run: |
+          echo "✅ DEV deployment successful"
+
+  deploy-prod:
+    name: Deploy to PROD (Manual Approval Required)
+    runs-on: ubuntu-latest
+    needs: test-dev
+    if: github.ref == 'refs/heads/main'
+    environment:
+      name: production
+      url: https://app.snowflake.com
+    env:
+      DBT_TARGET: prod
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE_PROD }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install dbt-snowflake==1.10.3
+
+      - name: Create profiles.yml
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<EOF
+          gg_vp_data:
+            target: prod
+            outputs:
+              prod:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_PROD_USER }}
+                password: ${{ secrets.SNOWFLAKE_PROD_PASSWORD }}
+                role: DBT_RUNNER
+                database: ${{ secrets.SNOWFLAKE_DATABASE_PROD }}
+                warehouse: TRANSFORM_WH
+                schema: staging
+                threads: 4
+          EOF
+
+      - name: Run Flyway migrations (PROD)
+        uses: docker://flyway/flyway:latest
+        with:
+          args: >
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
+            -user=${{ secrets.SNOWFLAKE_PROD_USER }}
+            -password=${{ secrets.SNOWFLAKE_PROD_PASSWORD }}
+            -locations=filesystem:./flyway/sql
+            -schemas=${{ secrets.SNOWFLAKE_DATABASE_PROD }}.staging,${{ secrets.SNOWFLAKE_DATABASE_PROD }}.intermediate,${{ secrets.SNOWFLAKE_DATABASE_PROD }}.marts
+            migrate
+
+      - name: dbt deps
+        run: dbt deps
+
+      - name: dbt run (incremental)
+        run: dbt run --target prod
+
+      - name: dbt test (fail-fast)
+        run: dbt test --target prod --fail-fast
+
+      - name: Generate dbt docs
+        run: |
+          dbt docs generate --target prod
+
+      - name: Create deployment tag
+        if: success()
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git tag -a "deploy-$(date +%Y%m%d-%H%M%S)" -m "Production deployment"
+          git push origin --tags
+
+      - name: Notify deployment success
+        if: success()
+        run: |
+          echo "✅ PROD deployment successful at $(date)"
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "❌ PROD deployment failed - manual rollback required"
+          echo "Check logs and run: dbt run --target prod --vars '{rollback: true}'"
+          exit 1

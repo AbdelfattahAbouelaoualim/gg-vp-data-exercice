@@ -1,0 +1,8 @@
+version: 2
+
+seeds:
+  - name: communes-france-2025
+    description: "Référentiel communes France 2025 (data.gouv.fr)"
+    config:
+      column_types:
+        a: INTEGER

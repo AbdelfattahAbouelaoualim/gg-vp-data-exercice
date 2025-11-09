@@ -1,0 +1,127 @@
+version: 2
+
+models:
+  - name: int_magasins_merged
+    description: |
+      UNION ALL simple des sources TH et GI (sans dédoublonnage).
+      Utilisé comme base pour int_magasins_fuzzy_dedup.
+
+  - name: int_magasins_fuzzy_dedup
+    description: |
+      Magasins dédoublonnés entre sources TH et GI via matching fuzzy.
+
+      **Algorithme de détection doublons** :
+      - Similarité nom (EDITDISTANCE) >= 85%
+      - Distance géographique (Haversine) <= 500 mètres
+
+      **Stratégie "Golden Record"** :
+      Pour chaque groupe de doublons détectés :
+      - Nom : Le plus long (le plus détaillé)
+      - Coordonnées : Les plus précises (non arrondies + valides)
+      - Source principale : TH par défaut (ou GI si meilleure qualité)
+      - Timestamp : Le plus récent
+
+      **Nouvelles colonnes de traçabilité** :
+      - `sources_merged` : Liste des sources ayant ce magasin
+      - `is_merged_record` : TRUE si c'est un golden record (doublon fusionné)
+      - `merge_name_similarity` : Score similarité du merge TH-GI
+      - `merge_distance_km` : Distance géographique du merge
+      - `original_th_id`, `original_gi_id` : IDs originaux pour audit
+
+    config:
+      materialized: table
+      tags: ['intermediate', 'deduplication', 'fuzzy_matching']
+
+    tests:
+      # Test volumétrie attendue : ~200k (au lieu de 220k avec doublons)
+      - dbt_expectations.expect_table_row_count_to_be_between:
+          min_value: 190000
+          max_value: 210000
+          severity: warn
+
+    columns:
+      - name: magasin_id
+        description: |
+          Surrogate key unique pour ce magasin (post-dédoublonnage).
+          Généré par MD5(nom + latitude + longitude).
+        tests:
+          - not_null
+          - unique
+
+      - name: nom_magasin
+        description: Nom du magasin (golden record si doublon)
+        tests:
+          - not_null
+
+      - name: latitude
+        description: Latitude GPS (golden record si doublon)
+        tests:
+          - not_null
+
+      - name: longitude
+        description: Longitude GPS (golden record si doublon)
+        tests:
+          - not_null
+
+      - name: source_system
+        description: |
+          Source principale retenue après dédoublonnage.
+          'TH' ou 'GI' selon stratégie golden record.
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['TH', 'GI']
+
+      - name: sources_merged
+        description: |
+          ARRAY des sources ayant ce magasin.
+          - ['TH'] ou ['GI'] : magasin unique (pas de doublon)
+          - ['TH', 'GI'] : magasin fusionné (doublon détecté)
+        tests:
+          - not_null
+
+      - name: is_merged_record
+        description: |
+          Flag indiquant si c'est un golden record (doublon fusionné).
+          - TRUE : magasin présent dans TH ET GI (fusionné)
+          - FALSE : magasin unique à une source
+
+      - name: merge_name_similarity
+        description: |
+          Score de similarité nom lors du merge TH-GI (0.0 à 1.0).
+          NULL si is_merged_record = FALSE.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.85
+              max_value: 1.0
+              config:
+                where: "is_merged_record = TRUE"
+
+      - name: merge_distance_km
+        description: |
+          Distance géographique (km) entre TH et GI lors du merge.
+          NULL si is_merged_record = FALSE.
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0.0
+              max_value: 0.5
+              severity: warn
+              config:
+                where: "is_merged_record = TRUE"
+
+      - name: original_th_id
+        description: ID original dans TH.magasins (traçabilité)
+
+      - name: original_gi_id
+        description: ID original dans GI.magasins (NULL si pas de doublon)
+
+  - name: int_magasins_augmented
+    description: |
+      Magasins enrichis avec métadonnées communes France 2025.
+
+      Utilise int_magasins_fuzzy_dedup comme base (dédoublonné).
+      Ajoute matching fuzzy avec référentiel communes pour enrichissement géographique.
+
+    config:
+      materialized: view
+      tags: ['intermediate', 'enrichissement']
