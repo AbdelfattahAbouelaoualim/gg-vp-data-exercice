@@ -27,71 +27,30 @@ communes AS (
         AND longitude_centre IS NOT NULL
 ),
 
-magasins_with_best_match AS (
+magasins_with_ranked_communes AS (
     SELECT
         m.magasin_id,
         m.nom_magasin,
         m.latitude,
         m.longitude,
         m.source_system,
-        m.sources_merged,  -- Nouvelle colonne du fuzzy dedup
+        m.sources_merged,
         m.loaded_at,
-        m.is_merged_record,  -- Flag si c'est un golden record
-        m.merge_name_similarity,  -- Similarité du merge TH-GI
-        m.merge_distance_km,  -- Distance du merge TH-GI
+        m.is_merged_record,
+        m.merge_name_similarity,
+        m.merge_distance_km,
         m.original_th_id,
         m.original_gi_id,
 
-        -- Meilleur match commune (par similarité de nom)
-        FIRST_VALUE(c.code_insee) OVER (
-            PARTITION BY m.magasin_id
-            ORDER BY
-                {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} DESC,
-                {{ haversine_distance(
-                    'm.latitude',
-                    'm.longitude',
-                    'c.latitude_centre',
-                    'c.longitude_centre'
-                ) }} ASC
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        ) AS matched_code_insee,
-
-        -- Score de similarité du meilleur match
-        FIRST_VALUE(
-            {{ text_similarity('m.nom_magasin', 'c.nom_standard') }}
-        ) OVER (
-            PARTITION BY m.magasin_id
-            ORDER BY
-                {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} DESC,
-                {{ haversine_distance(
-                    'm.latitude',
-                    'm.longitude',
-                    'c.latitude_centre',
-                    'c.longitude_centre'
-                ) }} ASC
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        ) AS similarity_score,
-
-        -- Distance du meilleur match
-        FIRST_VALUE(
-            {{ haversine_distance(
-                'm.latitude',
-                'm.longitude',
-                'c.latitude_centre',
-                'c.longitude_centre'
-            ) }}
-        ) OVER (
-            PARTITION BY m.magasin_id
-            ORDER BY
-                {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} DESC,
-                {{ haversine_distance(
-                    'm.latitude',
-                    'm.longitude',
-                    'c.latitude_centre',
-                    'c.longitude_centre'
-                ) }} ASC
-            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
-        ) AS distance_km,
+        -- Commune matching
+        c.code_insee AS matched_code_insee,
+        {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} AS similarity_score,
+        {{ haversine_distance(
+            'm.latitude',
+            'm.longitude',
+            'c.latitude_centre',
+            'c.longitude_centre'
+        ) }} AS distance_km,
 
         -- Détection coordonnées dans plage France métropolitaine
         CASE
@@ -106,7 +65,21 @@ magasins_with_best_match AS (
             WHEN (m.latitude * 1000) % 10 = 0 OR (m.longitude * 1000) % 10 = 0
             THEN TRUE
             ELSE FALSE
-        END AS coords_arrondies
+        END AS coords_arrondies,
+
+        -- Rang déterministe pour sélectionner le meilleur match
+        ROW_NUMBER() OVER (
+            PARTITION BY m.magasin_id, m.source_system
+            ORDER BY
+                {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} DESC,
+                {{ haversine_distance(
+                    'm.latitude',
+                    'm.longitude',
+                    'c.latitude_centre',
+                    'c.longitude_centre'
+                ) }} ASC,
+                c.code_insee ASC  -- Tie-breaker déterministe
+        ) AS match_rank
 
     FROM magasins AS m
     CROSS JOIN communes AS c
@@ -115,8 +88,8 @@ magasins_with_best_match AS (
         {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} > 0.3
 ),
 
-deduplicated AS (
-    SELECT DISTINCT
+best_matches AS (
+    SELECT
         magasin_id,
         nom_magasin,
         latitude,
@@ -134,7 +107,8 @@ deduplicated AS (
         matched_code_insee,
         similarity_score,
         distance_km
-    FROM magasins_with_best_match
+    FROM magasins_with_ranked_communes
+    WHERE match_rank = 1  -- Garder uniquement le meilleur match
 ),
 
 enriched AS (
@@ -159,7 +133,7 @@ enriched AS (
         -- Flag correction nécessaire
         (d.distance_km > 50) AS coords_correction_requise
 
-    FROM deduplicated AS d
+    FROM best_matches AS d
     LEFT JOIN communes AS c
         ON d.matched_code_insee = c.code_insee
 )
