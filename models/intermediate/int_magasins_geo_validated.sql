@@ -126,8 +126,9 @@ magasins_matched_by_name AS (
 ),
 
 -- Étape 3 : Dédupliquer (FIRST_VALUE crée des duplicatas)
+-- Utilisation de QUALIFY pour garantir une seule ligne par magasin_id
 magasins_matched_dedup AS (
-  SELECT DISTINCT
+  SELECT
     magasin_id,
     nom_magasin,
     latitude_originale,
@@ -144,6 +145,7 @@ magasins_matched_dedup AS (
     dep_code_from_name,
     similarity_ville_commune
   FROM magasins_matched_by_name
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY magasin_id, source_system ORDER BY magasin_id) = 1
 ),
 
 -- Étape 4 : Trouver la commune la plus proche (par GPS)
@@ -173,7 +175,7 @@ magasins_matched_by_gps AS (
 ),
 
 magasins_gps_dedup AS (
-  SELECT DISTINCT
+  SELECT
     magasin_id,
     nom_magasin,
     latitude_originale,
@@ -193,6 +195,7 @@ magasins_gps_dedup AS (
     commune_nom_from_gps,
     distance_gps_vs_commune
   FROM magasins_matched_by_gps
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY magasin_id, source_system ORDER BY magasin_id) = 1
 ),
 
 -- Étape 5 : Validation et correction
