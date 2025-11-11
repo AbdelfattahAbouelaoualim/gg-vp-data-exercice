@@ -33,10 +33,11 @@ models:
       tags: ['intermediate', 'deduplication', 'fuzzy_matching']
 
     tests:
-      # Test volumétrie attendue : ~200k (au lieu de 220k avec doublons)
+      # Test volumétrie attendue : ~60k-70k
+      # Note: 70% des 220k sources ont GPS invalides (hors France) → filtrés par int_magasins_geo_validated
       - dbt_expectations.expect_table_row_count_to_be_between:
-          min_value: 190000
-          max_value: 210000
+          min_value: 60000
+          max_value: 70000
           severity: warn
 
     columns:

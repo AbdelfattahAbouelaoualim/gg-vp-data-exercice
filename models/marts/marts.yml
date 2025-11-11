@@ -28,10 +28,11 @@ models:
       tags: ['marts', 'dimension', 'scd_type_2']
 
     tests:
-      # Test volumétrie
+      # Test volumétrie attendue : ~60k-70k (is_current=TRUE)
+      # Note: 70% des 220k sources ont GPS invalides (hors France) → filtrés en amont
       - dbt_expectations.expect_table_row_count_to_be_between:
-          min_value: 200000
-          max_value: 250000
+          min_value: 60000
+          max_value: 70000
           severity: warn
 
     columns:
