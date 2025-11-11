@@ -192,11 +192,11 @@ jobs:
           JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
         with:
           args: >
-            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_DEV }}
             -user=${{ secrets.SNOWFLAKE_USER }}
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
-            -schemas=${{ secrets.SNOWFLAKE_DATABASE_DEV }}.staging,${{ secrets.SNOWFLAKE_DATABASE_DEV }}.intermediate,${{ secrets.SNOWFLAKE_DATABASE_DEV }}.marts
+            -schemas=staging,intermediate,marts
             migrate
 
       - name: dbt deps
@@ -301,11 +301,11 @@ jobs:
           JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
         with:
           args: >
-            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_PROD }}
             -user=${{ secrets.SNOWFLAKE_USER }}
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
-            -schemas=${{ secrets.SNOWFLAKE_DATABASE_PROD }}.staging,${{ secrets.SNOWFLAKE_DATABASE_PROD }}.intermediate,${{ secrets.SNOWFLAKE_DATABASE_PROD }}.marts
+            -schemas=staging,intermediate,marts
             migrate
 
       - name: dbt deps
