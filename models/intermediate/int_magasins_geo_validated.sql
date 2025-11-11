@@ -67,7 +67,7 @@ magasins_matched_by_name AS (
 
     -- Meilleure commune par similarité de nom
     FIRST_VALUE(c.code_insee) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -75,7 +75,7 @@ magasins_matched_by_name AS (
     ) as code_insee_from_name,
 
     FIRST_VALUE(c.nom_standard) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -83,7 +83,7 @@ magasins_matched_by_name AS (
     ) as commune_nom_from_name,
 
     FIRST_VALUE(c.latitude_centre) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -91,7 +91,7 @@ magasins_matched_by_name AS (
     ) as lat_insee_from_name,
 
     FIRST_VALUE(c.longitude_centre) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -99,7 +99,7 @@ magasins_matched_by_name AS (
     ) as lon_insee_from_name,
 
     FIRST_VALUE(c.dep_code) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -110,7 +110,7 @@ magasins_matched_by_name AS (
     FIRST_VALUE(
       {{ text_similarity('m.ville_extraite', 'c.nom_standard') }}
     ) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -155,13 +155,13 @@ magasins_matched_by_gps AS (
 
     -- Meilleure commune par proximité GPS
     FIRST_VALUE(c.code_insee) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY {{ haversine_distance('m.latitude_originale', 'm.longitude_originale', 'c.latitude_centre', 'c.longitude_centre') }} ASC
       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
     ) as code_insee_from_gps,
 
     FIRST_VALUE(c.nom_standard) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY {{ haversine_distance('m.latitude_originale', 'm.longitude_originale', 'c.latitude_centre', 'c.longitude_centre') }} ASC
       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
     ) as commune_nom_from_gps,
