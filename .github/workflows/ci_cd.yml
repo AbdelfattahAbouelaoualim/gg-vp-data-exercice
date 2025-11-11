@@ -196,7 +196,6 @@ jobs:
             -user=${{ secrets.SNOWFLAKE_USER }}
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
-            -defaultSchema=PUBLIC
             -schemas=staging,intermediate,marts
             migrate
 
@@ -306,7 +305,6 @@ jobs:
             -user=${{ secrets.SNOWFLAKE_USER }}
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
-            -defaultSchema=PUBLIC
             -schemas=staging,intermediate,marts
             migrate
 
