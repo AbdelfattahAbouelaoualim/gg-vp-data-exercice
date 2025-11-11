@@ -1,6 +1,7 @@
 {{
     config(
-        materialized='view',
+        materialized='table',
+        schema='intermediate',
         tags=['intermediate', 'enrichissement']
     )
 }}
