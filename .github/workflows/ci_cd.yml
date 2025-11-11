@@ -157,6 +157,8 @@ jobs:
 
       - name: Run Flyway migrations (DEV)
         uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
         with:
           args: >
             -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
@@ -233,6 +235,8 @@ jobs:
 
       - name: Run Flyway migrations (PROD)
         uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
         with:
           args: >
             -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
