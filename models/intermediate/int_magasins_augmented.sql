@@ -26,6 +26,7 @@ communes AS (
     WHERE
         latitude_centre IS NOT NULL
         AND longitude_centre IS NOT NULL
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY code_insee ORDER BY nom_standard ASC) = 1
 ),
 
 magasins_with_ranked_communes AS (
