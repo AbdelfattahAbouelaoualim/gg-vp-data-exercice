@@ -105,11 +105,42 @@ jobs:
       - name: dbt debug
         run: dbt debug
 
+      - name: Detect changes in dbt files
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="${{ github.event.before }}"
+          fi
+
+          # Check if this is the first commit on the branch
+          if [ "$BASE_REF" == "0000000000000000000000000000000000000000" ] || [ -z "$BASE_REF" ]; then
+            echo "First commit detected, forcing full refresh"
+            echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+          else
+            # Detect changes in dbt-related files
+            CHANGED_FILES=$(git diff --name-only $BASE_REF HEAD || echo "error")
+
+            if echo "$CHANGED_FILES" | grep -qE '^(models/|seeds/|macros/|dbt_project\.yml)'; then
+              echo "Changes detected in dbt files, full refresh needed"
+              echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes in dbt files, incremental run"
+              echo "needs_full_refresh=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - name: dbt seed
         run: dbt seed --target dev
 
-      - name: dbt run
+      - name: dbt run (full-refresh)
+        if: steps.changes.outputs.needs_full_refresh == 'true'
         run: dbt run --target dev --full-refresh
+
+      - name: dbt run (incremental)
+        if: steps.changes.outputs.needs_full_refresh == 'false'
+        run: dbt run --target dev
 
       - name: dbt test
         run: dbt test --target dev
@@ -171,11 +202,42 @@ jobs:
       - name: dbt deps
         run: dbt deps
 
+      - name: Detect changes in dbt files
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="${{ github.event.before }}"
+          fi
+
+          # Check if this is the first commit on the branch
+          if [ "$BASE_REF" == "0000000000000000000000000000000000000000" ] || [ -z "$BASE_REF" ]; then
+            echo "First commit detected, forcing full refresh"
+            echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+          else
+            # Detect changes in dbt-related files
+            CHANGED_FILES=$(git diff --name-only $BASE_REF HEAD || echo "error")
+
+            if echo "$CHANGED_FILES" | grep -qE '^(models/|seeds/|macros/|dbt_project\.yml)'; then
+              echo "Changes detected in dbt files, full refresh needed"
+              echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes in dbt files, incremental run"
+              echo "needs_full_refresh=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - name: dbt seed
         run: dbt seed --target dev
 
       - name: dbt run (full-refresh)
+        if: steps.changes.outputs.needs_full_refresh == 'true'
         run: dbt run --target dev --full-refresh
+
+      - name: dbt run (incremental)
+        if: steps.changes.outputs.needs_full_refresh == 'false'
+        run: dbt run --target dev
 
       - name: dbt test
         run: dbt test --target dev
