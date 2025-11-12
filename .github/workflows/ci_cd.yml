@@ -186,6 +186,19 @@ jobs:
                 threads: 4
           EOF
 
+      - name: Repair Flyway schema history (DEV)
+        uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
+        with:
+          args: >
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_DEV }}&role=${{ secrets.SNOWFLAKE_ROLE }}&warehouse=${{ secrets.SNOWFLAKE_WAREHOUSE }}
+            -user=${{ secrets.SNOWFLAKE_USER }}
+            -password=${{ secrets.SNOWFLAKE_PASSWORD }}
+            -locations=filesystem:./flyway/sql
+            -defaultSchema=FLYWAY_HISTORY
+            repair
+
       - name: Run Flyway migrations (DEV)
         uses: docker://flyway/flyway:latest
         env:
@@ -294,6 +307,19 @@ jobs:
                 schema: staging
                 threads: 4
           EOF
+
+      - name: Repair Flyway schema history (PROD)
+        uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
+        with:
+          args: >
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_PROD }}&role=${{ secrets.SNOWFLAKE_ROLE }}&warehouse=${{ secrets.SNOWFLAKE_WAREHOUSE }}
+            -user=${{ secrets.SNOWFLAKE_USER }}
+            -password=${{ secrets.SNOWFLAKE_PASSWORD }}
+            -locations=filesystem:./flyway/sql
+            -defaultSchema=FLYWAY_HISTORY
+            repair
 
       - name: Run Flyway migrations (PROD)
         uses: docker://flyway/flyway:latest
