@@ -186,38 +186,6 @@ jobs:
                 threads: 4
           EOF
 
-      - name: Create schemas before Flyway
-        run: |
-          python3 << 'PYTHON_EOF'
-          import snowflake.connector
-          import os
-
-          # Connexion à Snowflake
-          conn = snowflake.connector.connect(
-              account=os.environ['SNOWFLAKE_ACCOUNT'],
-              user=os.environ['SNOWFLAKE_USER'],
-              password=os.environ['SNOWFLAKE_PASSWORD'],
-              role=os.environ['SNOWFLAKE_ROLE'],
-              warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
-              database=os.environ['SNOWFLAKE_DATABASE']
-          )
-
-          cursor = conn.cursor()
-
-          # Créer les schémas nécessaires pour Flyway
-          schemas = ['staging', 'intermediate', 'marts', 'observability']
-          for schema in schemas:
-              try:
-                  cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-                  print(f"✅ Schema {schema} créé ou existe déjà")
-              except Exception as e:
-                  print(f"⚠️  Erreur création {schema}: {e}")
-
-          cursor.close()
-          conn.close()
-          print("✅ Tous les schémas sont prêts pour Flyway")
-          PYTHON_EOF
-
       - name: Run Flyway migrations (DEV)
         uses: docker://flyway/flyway:latest
         env:
@@ -229,7 +197,6 @@ jobs:
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
             -defaultSchema=PUBLIC
-            -createSchemas=false
             -schemas=staging,intermediate,marts
             migrate
 
@@ -329,38 +296,6 @@ jobs:
                 threads: 4
           EOF
 
-      - name: Create schemas before Flyway
-        run: |
-          python3 << 'PYTHON_EOF'
-          import snowflake.connector
-          import os
-
-          # Connexion à Snowflake
-          conn = snowflake.connector.connect(
-              account=os.environ['SNOWFLAKE_ACCOUNT'],
-              user=os.environ['SNOWFLAKE_USER'],
-              password=os.environ['SNOWFLAKE_PASSWORD'],
-              role=os.environ['SNOWFLAKE_ROLE'],
-              warehouse=os.environ['SNOWFLAKE_WAREHOUSE'],
-              database=os.environ['SNOWFLAKE_DATABASE']
-          )
-
-          cursor = conn.cursor()
-
-          # Créer les schémas nécessaires pour Flyway
-          schemas = ['staging', 'intermediate', 'marts', 'observability']
-          for schema in schemas:
-              try:
-                  cursor.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
-                  print(f"✅ Schema {schema} créé ou existe déjà")
-              except Exception as e:
-                  print(f"⚠️  Erreur création {schema}: {e}")
-
-          cursor.close()
-          conn.close()
-          print("✅ Tous les schémas sont prêts pour Flyway")
-          PYTHON_EOF
-
       - name: Run Flyway migrations (PROD)
         uses: docker://flyway/flyway:latest
         env:
@@ -372,7 +307,6 @@ jobs:
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
             -defaultSchema=PUBLIC
-            -createSchemas=false
             -schemas=staging,intermediate,marts
             migrate
 
