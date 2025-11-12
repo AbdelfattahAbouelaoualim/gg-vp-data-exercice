@@ -5,16 +5,11 @@
 -- Date: 2025-11-08
 -- =====================================================
 
--- Create databases if they don't exist
--- Note: This should be run with SYSADMIN or ACCOUNTADMIN role
-
--- Development database
-CREATE DATABASE IF NOT EXISTS DWH_DEV_ABDELFATTAH
-    COMMENT = 'Development data warehouse for gg_vp_data project';
-
--- Production database
-CREATE DATABASE IF NOT EXISTS DWH_PROD_ABDELFATTAH
-    COMMENT = 'Production data warehouse for gg_vp_data project';
+-- =====================================================
+-- NOTE: Databases DWH_DEV_ABDELFATTAH and DWH_PROD_ABDELFATTAH
+-- are assumed to exist (created outside CI/CD with ACCOUNTADMIN).
+-- This migration only creates schemas within existing databases.
+-- =====================================================
 
 -- =====================================================
 -- DEV Schemas
