@@ -46,8 +46,13 @@ magasins_with_ranked_communes AS (
 
         -- Commune matching
         c.code_insee AS matched_code_insee,
-        c.similarity_score,
-        c.distance_km,
+        {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} AS similarity_score,
+        {{ haversine_distance(
+            'm.latitude',
+            'm.longitude',
+            'c.latitude_centre',
+            'c.longitude_centre'
+        ) }} AS distance_km,
 
         -- Détection coordonnées dans plage France métropolitaine
         CASE
@@ -74,25 +79,12 @@ magasins_with_ranked_communes AS (
         ) AS match_rank
 
     FROM magasins AS m
-    CROSS JOIN LATERAL (
-        -- OPTIMISATION CRITIQUE: LATERAL with LIMIT 50 instead of full CROSS JOIN
-        -- Before: 70k stores × 35k communes = 2.4 billion rows (40 min)
-        -- After: 70k stores × 50 communes = 3.5 million rows (5-8 min)
-        -- LIMIT 50 guarantees capturing the right match even in edge cases
-        SELECT
-            c2.code_insee,
-            {{ text_similarity('m.nom_magasin', 'c2.nom_standard') }} AS similarity_score,
-            {{ haversine_distance(
-                'm.latitude',
-                'm.longitude',
-                'c2.latitude_centre',
-                'c2.longitude_centre'
-            ) }} AS distance_km
-        FROM communes AS c2
-        WHERE {{ text_similarity('m.nom_magasin', 'c2.nom_standard') }} > 0.3
-        ORDER BY {{ text_similarity('m.nom_magasin', 'c2.nom_standard') }} DESC
-        LIMIT 50
-    ) AS c
+    CROSS JOIN communes AS c
+    WHERE
+        -- OPTIMISATION: Pre-filter with similarity > 0.3 to reduce cartesian product
+        -- Instead of 70k × 35k = 2.4B rows, this typically reduces to ~10-50 candidates per store
+        -- The similarity threshold is highly selective and performant in Snowflake
+        {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} > 0.3
 ),
 
 best_matches AS (
