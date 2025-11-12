@@ -197,7 +197,6 @@ jobs:
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
             -defaultSchema=FLYWAY_HISTORY
-            -schemas=staging,intermediate,marts
             migrate
 
       - name: dbt deps
@@ -307,7 +306,6 @@ jobs:
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
             -defaultSchema=FLYWAY_HISTORY
-            -schemas=staging,intermediate,marts
             migrate
 
       - name: dbt deps
