@@ -74,7 +74,7 @@ magasins_with_ranked_communes AS (
         ) AS match_rank
 
     FROM magasins AS m
-    JOIN LATERAL (
+    INNER JOIN LATERAL (
         -- OPTIMISATION CRITIQUE: LATERAL JOIN avec LIMIT 50 au lieu de CROSS JOIN
         -- Avant: 70k magasins × 35k communes = 2.4 milliards de lignes (40 min)
         -- Après: 70k magasins × 50 communes = 3.5 millions de lignes (5-8 min)
