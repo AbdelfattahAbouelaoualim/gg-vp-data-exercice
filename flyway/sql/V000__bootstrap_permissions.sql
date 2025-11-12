@@ -24,8 +24,13 @@ CREATE SCHEMA IF NOT EXISTS FLYWAY_HISTORY
 -- Grant full ownership to the CI/CD role
 GRANT OWNERSHIP ON SCHEMA FLYWAY_HISTORY TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
 
--- Grant CREATE SCHEMA privilege so Flyway can create staging/intermediate/marts
+-- Grant CREATE SCHEMA privilege so Flyway can create new schemas if needed
 GRANT CREATE SCHEMA ON DATABASE DWH_DEV_ABDELFATTAH TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+
+-- Grant privileges on existing schemas (created before CI/CD)
+GRANT ALL PRIVILEGES ON SCHEMA staging TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+GRANT ALL PRIVILEGES ON SCHEMA intermediate TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+GRANT ALL PRIVILEGES ON SCHEMA marts TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
 
 -- ===========================
 -- PROD ENVIRONMENT BOOTSTRAP
@@ -40,8 +45,23 @@ CREATE SCHEMA IF NOT EXISTS FLYWAY_HISTORY
 -- Grant full ownership to the CI/CD role
 GRANT OWNERSHIP ON SCHEMA FLYWAY_HISTORY TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
 
--- Grant CREATE SCHEMA privilege so Flyway can create staging/intermediate/marts
+-- Grant CREATE SCHEMA privilege so Flyway can create new schemas if needed
 GRANT CREATE SCHEMA ON DATABASE DWH_PROD_ABDELFATTAH TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+
+-- Create schemas (did not exist in PROD before CI/CD)
+CREATE SCHEMA IF NOT EXISTS staging
+    COMMENT = 'Staging layer - raw data ingestion';
+
+CREATE SCHEMA IF NOT EXISTS intermediate
+    COMMENT = 'Intermediate layer - business logic transformations';
+
+CREATE SCHEMA IF NOT EXISTS marts
+    COMMENT = 'Marts layer - final dimensional models';
+
+-- Grant privileges on schemas
+GRANT ALL PRIVILEGES ON SCHEMA staging TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+GRANT ALL PRIVILEGES ON SCHEMA intermediate TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+GRANT ALL PRIVILEGES ON SCHEMA marts TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
 
 -- =====================================================
 -- VERIFICATION
