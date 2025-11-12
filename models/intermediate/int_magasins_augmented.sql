@@ -74,7 +74,7 @@ magasins_with_ranked_communes AS (
         ) AS match_rank
 
     FROM magasins AS m
-        , LATERAL (
+    CROSS JOIN LATERAL (
         -- OPTIMISATION CRITIQUE: LATERAL with LIMIT 50 instead of full CROSS JOIN
         -- Before: 70k stores × 35k communes = 2.4 billion rows (40 min)
         -- After: 70k stores × 50 communes = 3.5 million rows (5-8 min)
