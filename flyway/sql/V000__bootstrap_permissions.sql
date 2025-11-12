@@ -11,6 +11,13 @@
 -- WHY: Flyway needs these permissions to create its metadata schema
 -- and manage other schemas in the database.
 
+-- =====================================================
+-- ACCOUNT-LEVEL PRIVILEGES (required for V002+)
+-- =====================================================
+
+-- Grant CREATE WAREHOUSE privilege to enable automated warehouse creation
+GRANT CREATE WAREHOUSE ON ACCOUNT TO ROLE ROLE_ABDELFATTAH_ABOUELAOUALIM;
+
 -- ==========================
 -- DEV ENVIRONMENT BOOTSTRAP
 -- ==========================
