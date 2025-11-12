@@ -74,11 +74,11 @@ magasins_with_ranked_communes AS (
         ) AS match_rank
 
     FROM magasins AS m
-    INNER JOIN LATERAL (
-        -- OPTIMISATION CRITIQUE: LATERAL JOIN avec LIMIT 50 au lieu de CROSS JOIN
-        -- Avant: 70k magasins × 35k communes = 2.4 milliards de lignes (40 min)
-        -- Après: 70k magasins × 50 communes = 3.5 millions de lignes (5-8 min)
-        -- LIMIT 50 garantit de capturer le bon match même dans les cas edge
+        , LATERAL (
+        -- OPTIMISATION CRITIQUE: LATERAL with LIMIT 50 instead of full CROSS JOIN
+        -- Before: 70k stores × 35k communes = 2.4 billion rows (40 min)
+        -- After: 70k stores × 50 communes = 3.5 million rows (5-8 min)
+        -- LIMIT 50 guarantees capturing the right match even in edge cases
         SELECT
             c2.code_insee,
             {{ text_similarity('m.nom_magasin', 'c2.nom_standard') }} AS similarity_score,
@@ -92,7 +92,7 @@ magasins_with_ranked_communes AS (
         WHERE {{ text_similarity('m.nom_magasin', 'c2.nom_standard') }} > 0.3
         ORDER BY {{ text_similarity('m.nom_magasin', 'c2.nom_standard') }} DESC
         LIMIT 50
-    ) AS c ON TRUE
+    ) AS c
 ),
 
 best_matches AS (
