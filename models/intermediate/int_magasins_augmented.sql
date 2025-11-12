@@ -73,8 +73,13 @@ magasins_with_ranked_communes AS (
         ROW_NUMBER() OVER (
             PARTITION BY m.magasin_id, m.source_system
             ORDER BY
-                c.similarity_score DESC,
-                c.distance_km ASC,
+                {{ text_similarity('m.nom_magasin', 'c.nom_standard') }} DESC,
+                {{ haversine_distance(
+                    'm.latitude',
+                    'm.longitude',
+                    'c.latitude_centre',
+                    'c.longitude_centre'
+                ) }} ASC,
                 c.code_insee ASC  -- Tie-breaker déterministe
         ) AS match_rank
 
