@@ -100,7 +100,7 @@ new_versions AS (
         {{ dbt_utils.generate_surrogate_key([
             'magasin_id',
             'source_system',
-            'loaded_at'
+            'CURRENT_TIMESTAMP()'
         ]) }} AS magasin_key,
         magasin_id,
         nom_magasin,
@@ -138,7 +138,7 @@ SELECT
     {{ dbt_utils.generate_surrogate_key([
         'magasin_id',
         'source_system',
-        'loaded_at'
+        'CURRENT_TIMESTAMP()'
     ]) }} AS magasin_key,
     magasin_id,
     nom_magasin,

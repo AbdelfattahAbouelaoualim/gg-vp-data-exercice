@@ -195,59 +195,69 @@ Environment name: production
 
 ## 🔐 Configuration Secrets
 
+> **📝 Configuration Simplifiée (Exercice)**
+>
+> Dans cet exercice, nous utilisons **le même compte Snowflake** pour DEV et PROD (au lieu de créer des service accounts dédiés). Cela simplifie la configuration tout en maintenant la sécurité via l'approbation manuelle GitHub.
+>
+> **Configuration locale** : Les credentials Snowflake sont stockés dans `.envrc` (fichier ignoré par Git via `.gitignore`). Ce fichier contient les variables d'environnement (`SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, etc.) chargées automatiquement par `direnv`.
+>
+> **Configuration GitHub Actions** : Les **7 mêmes credentials** sont dupliqués dans les GitHub Secrets pour permettre aux workflows CI/CD d'accéder à Snowflake.
+>
+> **Total : 7 secrets au lieu de 9**
+>
+> **⚠️ Production Réelle** : Créez des service accounts dédiés (`GITHUB_ACTIONS_BOT`) avec rôles spécifiques (`DBT_RUNNER`, `FLYWAY_DEPLOYER`). Voir README.md section "Implémentation RBAC".
+
 ### Secrets Repository (Actions)
 
 **Accès** : GitHub → Settings → Secrets and variables → Actions → New repository secret
 
-#### Secrets à Créer
+#### Secrets à Créer (7 au total)
 
-**DEV Environment** :
+**Secrets Communs (utilisés pour DEV et PROD)** :
 
 ```
 SNOWFLAKE_ACCOUNT
-  Value: DYFAIYB-HEB08485
+  Value: [VOTRE_COMPTE_SNOWFLAKE]
+  Exemple: qyxyvfy-be09150
 
 SNOWFLAKE_USER
-  Value: ABDELFATTAH_ABOUELAOUALIM
+  Value: [VOTRE_USERNAME_SNOWFLAKE]
+  Exemple: ABDELFATTAH_ABOUELAOUALIM
 
 SNOWFLAKE_PASSWORD
   Value: [VOTRE_MOT_DE_PASSE_SNOWFLAKE]
 
 SNOWFLAKE_ROLE
-  Value: DATA_ENGINEER
+  Value: [VOTRE_RÔLE_SNOWFLAKE]
+  Exemple: ROLE_ABDELFATTAH_ABOUELAOUALIM
 
 SNOWFLAKE_WAREHOUSE
-  Value: TRANSFORM_WH
+  Value: [VOTRE_WAREHOUSE_SNOWFLAKE]
+  Exemple: COMPUTE_WH
+```
 
+**Secrets Spécifiques par Environnement** :
+
+```
 SNOWFLAKE_DATABASE_DEV
   Value: DWH_DEV_ABDELFATTAH
-```
 
-**PROD Environment** :
-
-```
 SNOWFLAKE_DATABASE_PROD
   Value: DWH_PROD_ABDELFATTAH
-
-SNOWFLAKE_PROD_USER
-  Value: github_actions_bot
-
-SNOWFLAKE_PROD_PASSWORD
-  Value: [MOT_DE_PASSE_SERVICE_ACCOUNT]
 ```
 
 #### ⚠️ Notes Importantes
 
-1. **SNOWFLAKE_PROD_USER** : C'est le **service account** (pas votre compte personnel)
-   - Doit avoir le rôle `CICD_PIPELINE` (qui hérite `DBT_RUNNER` + `FLYWAY_DEPLOYER`)
-   - Voir README.md section "Implémentation RBAC" pour création
+1. **Sécurité** : Bien que le même compte soit utilisé, la sécurité est assurée par :
+   - Séparation stricte des databases (DEV vs PROD)
+   - Approbation manuelle obligatoire pour PROD (GitHub Environment)
+   - Audit trail complet via GitHub Actions logs
 
-2. **Mots de passe** : Utiliser des mots de passe forts (32+ caractères)
-   - Rotation recommandée tous les 90 jours
+2. **Mots de passe** : Utiliser des mots de passe forts (12+ caractères minimum)
+   - Ne jamais partager ou commiter les credentials
 
-3. **Variables d'environnement** : Alternative possible
-   - Secrets = sensibles (passwords)
-   - Variables = non-sensibles (account, database names)
+3. **Vérification des valeurs** : Utilisez les valeurs de votre configuration Snowflake locale
+   - Ne copiez pas les exemples ci-dessus tels quels
 
 ---
 
@@ -348,8 +358,7 @@ git push origin develop
 - [ ] **Branch Protection `main`** configurée (require approval + status checks)
 - [ ] **Branch Protection `develop`** configurée (status checks)
 - [ ] **Environment `production`** créé (required reviewers + deployment branch `main`)
-- [ ] **Secrets GitHub Actions** configurés (8 secrets DEV + PROD)
-- [ ] **Service Account Snowflake** créé (`github_actions_bot` avec rôle `CICD_PIPELINE`)
+- [ ] **Secrets GitHub Actions** configurés (7 secrets - configuration simplifiée)
 - [ ] **Flyway migrations** testées en DEV
 - [ ] **dbt profiles.yml** configuré correctement
 - [ ] **CI/CD workflow** `.github/workflows/ci_cd.yml` présent et valide

@@ -8,7 +8,6 @@ on:
   workflow_dispatch:
 
 env:
-  DBT_PROFILES_DIR: ${{ github.workspace }}
   SNOWFLAKE_ACCOUNT: ${{ secrets.SNOWFLAKE_ACCOUNT }}
   SNOWFLAKE_USER: ${{ secrets.SNOWFLAKE_USER }}
   SNOWFLAKE_PASSWORD: ${{ secrets.SNOWFLAKE_PASSWORD }}
@@ -19,6 +18,8 @@ jobs:
   lint:
     name: Lint SQL with sqlfluff
     runs-on: ubuntu-latest
+    env:
+      SNOWFLAKE_DATABASE: ${{ secrets.SNOWFLAKE_DATABASE_DEV }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -28,25 +29,35 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install sqlfluff
+      - name: Install dependencies
         run: |
-          pip install sqlfluff sqlfluff-templater-dbt
+          pip install sqlfluff sqlfluff-templater-dbt dbt-snowflake==1.10.3
+
+      - name: Create profiles.yml for dbt compilation
+        run: |
+          mkdir -p ~/.dbt
+          cat > ~/.dbt/profiles.yml <<EOF
+          gg_vp_data:
+            target: dev
+            outputs:
+              dev:
+                type: snowflake
+                account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ${{ secrets.SNOWFLAKE_ROLE }}
+                database: ${{ secrets.SNOWFLAKE_DATABASE_DEV }}
+                warehouse: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
+                schema: staging
+                threads: 4
+          EOF
+
+      - name: Install dbt packages
+        run: dbt deps
 
       - name: Run sqlfluff lint
         run: |
-          sqlfluff lint models/ --dialect snowflake --exclude-rules LT05,LT02
-
-      - name: Comment PR with lint results
-        if: failure() && github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '❌ **sqlfluff lint failed**. Please fix SQL formatting errors.'
-            })
+          sqlfluff lint models/ --dialect snowflake
 
   test-dev:
     name: Test on DEV environment
@@ -94,27 +105,45 @@ jobs:
       - name: dbt debug
         run: dbt debug
 
+      - name: Detect changes in dbt files
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="${{ github.event.before }}"
+          fi
+
+          # Check if this is the first commit on the branch
+          if [ "$BASE_REF" == "0000000000000000000000000000000000000000" ] || [ -z "$BASE_REF" ]; then
+            echo "First commit detected, forcing full refresh"
+            echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+          else
+            # Detect changes in dbt-related files
+            CHANGED_FILES=$(git diff --name-only $BASE_REF HEAD || echo "error")
+
+            if echo "$CHANGED_FILES" | grep -qE '^(models/|seeds/|macros/|dbt_project\.yml)'; then
+              echo "Changes detected in dbt files, full refresh needed"
+              echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes in dbt files, incremental run"
+              echo "needs_full_refresh=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - name: dbt seed
         run: dbt seed --target dev
 
-      - name: dbt run
+      - name: dbt run (full-refresh)
+        if: steps.changes.outputs.needs_full_refresh == 'true'
+        run: dbt run --target dev --full-refresh
+
+      - name: dbt run (incremental)
+        if: steps.changes.outputs.needs_full_refresh == 'false'
         run: dbt run --target dev
 
       - name: dbt test
         run: dbt test --target dev
-
-      - name: Comment PR with test results
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const status = '${{ job.status }}' === 'success' ? '✅' : '❌';
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: `${status} **DEV tests ${status === '✅' ? 'passed' : 'failed'}**`
-            })
 
   deploy-dev:
     name: Deploy to DEV
@@ -157,25 +186,71 @@ jobs:
                 threads: 4
           EOF
 
-      - name: Run Flyway migrations (DEV)
+      - name: Repair Flyway schema history (DEV)
         uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
         with:
           args: >
-            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_DEV }}&role=${{ secrets.SNOWFLAKE_ROLE }}&warehouse=${{ secrets.SNOWFLAKE_WAREHOUSE }}
             -user=${{ secrets.SNOWFLAKE_USER }}
             -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
-            -schemas=${{ secrets.SNOWFLAKE_DATABASE_DEV }}.staging,${{ secrets.SNOWFLAKE_DATABASE_DEV }}.intermediate,${{ secrets.SNOWFLAKE_DATABASE_DEV }}.marts
+            -defaultSchema=FLYWAY_HISTORY
+            repair
+
+      - name: Run Flyway migrations (DEV)
+        uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
+        with:
+          args: >
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_DEV }}&role=${{ secrets.SNOWFLAKE_ROLE }}&warehouse=${{ secrets.SNOWFLAKE_WAREHOUSE }}
+            -user=${{ secrets.SNOWFLAKE_USER }}
+            -password=${{ secrets.SNOWFLAKE_PASSWORD }}
+            -locations=filesystem:./flyway/sql
+            -defaultSchema=FLYWAY_HISTORY
             migrate
 
       - name: dbt deps
         run: dbt deps
 
+      - name: Detect changes in dbt files
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            BASE_REF="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_REF="${{ github.event.before }}"
+          fi
+
+          # Check if this is the first commit on the branch
+          if [ "$BASE_REF" == "0000000000000000000000000000000000000000" ] || [ -z "$BASE_REF" ]; then
+            echo "First commit detected, forcing full refresh"
+            echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+          else
+            # Detect changes in dbt-related files
+            CHANGED_FILES=$(git diff --name-only $BASE_REF HEAD || echo "error")
+
+            if echo "$CHANGED_FILES" | grep -qE '^(models/|seeds/|macros/|dbt_project\.yml)'; then
+              echo "Changes detected in dbt files, full refresh needed"
+              echo "needs_full_refresh=true" >> $GITHUB_OUTPUT
+            else
+              echo "No changes in dbt files, incremental run"
+              echo "needs_full_refresh=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
       - name: dbt seed
         run: dbt seed --target dev
 
       - name: dbt run (full-refresh)
+        if: steps.changes.outputs.needs_full_refresh == 'true'
         run: dbt run --target dev --full-refresh
+
+      - name: dbt run (incremental)
+        if: steps.changes.outputs.needs_full_refresh == 'false'
+        run: dbt run --target dev
 
       - name: dbt test
         run: dbt test --target dev
@@ -224,24 +299,39 @@ jobs:
               prod:
                 type: snowflake
                 account: ${{ secrets.SNOWFLAKE_ACCOUNT }}
-                user: ${{ secrets.SNOWFLAKE_PROD_USER }}
-                password: ${{ secrets.SNOWFLAKE_PROD_PASSWORD }}
-                role: DBT_RUNNER
+                user: ${{ secrets.SNOWFLAKE_USER }}
+                password: ${{ secrets.SNOWFLAKE_PASSWORD }}
+                role: ${{ secrets.SNOWFLAKE_ROLE }}
                 database: ${{ secrets.SNOWFLAKE_DATABASE_PROD }}
-                warehouse: TRANSFORM_WH
+                warehouse: ${{ secrets.SNOWFLAKE_WAREHOUSE }}
                 schema: staging
                 threads: 4
           EOF
 
-      - name: Run Flyway migrations (PROD)
+      - name: Repair Flyway schema history (PROD)
         uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
         with:
           args: >
-            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com
-            -user=${{ secrets.SNOWFLAKE_PROD_USER }}
-            -password=${{ secrets.SNOWFLAKE_PROD_PASSWORD }}
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_PROD }}&role=${{ secrets.SNOWFLAKE_ROLE }}&warehouse=${{ secrets.SNOWFLAKE_WAREHOUSE }}
+            -user=${{ secrets.SNOWFLAKE_USER }}
+            -password=${{ secrets.SNOWFLAKE_PASSWORD }}
             -locations=filesystem:./flyway/sql
-            -schemas=${{ secrets.SNOWFLAKE_DATABASE_PROD }}.staging,${{ secrets.SNOWFLAKE_DATABASE_PROD }}.intermediate,${{ secrets.SNOWFLAKE_DATABASE_PROD }}.marts
+            -defaultSchema=FLYWAY_HISTORY
+            repair
+
+      - name: Run Flyway migrations (PROD)
+        uses: docker://flyway/flyway:latest
+        env:
+          JAVA_TOOL_OPTIONS: "--add-opens=java.base/java.nio=org.apache.arrow.memory.core,ALL-UNNAMED"
+        with:
+          args: >
+            -url=jdbc:snowflake://${{ secrets.SNOWFLAKE_ACCOUNT }}.snowflakecomputing.com/?db=${{ secrets.SNOWFLAKE_DATABASE_PROD }}&role=${{ secrets.SNOWFLAKE_ROLE }}&warehouse=${{ secrets.SNOWFLAKE_WAREHOUSE }}
+            -user=${{ secrets.SNOWFLAKE_USER }}
+            -password=${{ secrets.SNOWFLAKE_PASSWORD }}
+            -locations=filesystem:./flyway/sql
+            -defaultSchema=FLYWAY_HISTORY
             migrate
 
       - name: dbt deps

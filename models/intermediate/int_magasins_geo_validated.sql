@@ -67,7 +67,7 @@ magasins_matched_by_name AS (
 
     -- Meilleure commune par similarité de nom
     FIRST_VALUE(c.code_insee) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -75,7 +75,7 @@ magasins_matched_by_name AS (
     ) as code_insee_from_name,
 
     FIRST_VALUE(c.nom_standard) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -83,7 +83,7 @@ magasins_matched_by_name AS (
     ) as commune_nom_from_name,
 
     FIRST_VALUE(c.latitude_centre) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -91,7 +91,7 @@ magasins_matched_by_name AS (
     ) as lat_insee_from_name,
 
     FIRST_VALUE(c.longitude_centre) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -99,7 +99,7 @@ magasins_matched_by_name AS (
     ) as lon_insee_from_name,
 
     FIRST_VALUE(c.dep_code) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -110,7 +110,7 @@ magasins_matched_by_name AS (
     FIRST_VALUE(
       {{ text_similarity('m.ville_extraite', 'c.nom_standard') }}
     ) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY
         {{ text_similarity('m.ville_extraite', 'c.nom_standard') }} DESC,
         {{ haversine_distance('m.latitude', 'm.longitude', 'c.latitude_centre', 'c.longitude_centre') }} ASC
@@ -126,8 +126,9 @@ magasins_matched_by_name AS (
 ),
 
 -- Étape 3 : Dédupliquer (FIRST_VALUE crée des duplicatas)
+-- Utilisation de QUALIFY pour garantir une seule ligne par magasin_id
 magasins_matched_dedup AS (
-  SELECT DISTINCT
+  SELECT
     magasin_id,
     nom_magasin,
     latitude_originale,
@@ -144,6 +145,7 @@ magasins_matched_dedup AS (
     dep_code_from_name,
     similarity_ville_commune
   FROM magasins_matched_by_name
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY magasin_id, source_system ORDER BY loaded_at DESC, nom_magasin ASC) = 1
 ),
 
 -- Étape 4 : Trouver la commune la plus proche (par GPS)
@@ -153,13 +155,13 @@ magasins_matched_by_gps AS (
 
     -- Meilleure commune par proximité GPS
     FIRST_VALUE(c.code_insee) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY {{ haversine_distance('m.latitude_originale', 'm.longitude_originale', 'c.latitude_centre', 'c.longitude_centre') }} ASC
       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
     ) as code_insee_from_gps,
 
     FIRST_VALUE(c.nom_standard) OVER (
-      PARTITION BY m.magasin_id
+      PARTITION BY m.magasin_id, m.source_system
       ORDER BY {{ haversine_distance('m.latitude_originale', 'm.longitude_originale', 'c.latitude_centre', 'c.longitude_centre') }} ASC
       ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
     ) as commune_nom_from_gps,
@@ -173,7 +175,7 @@ magasins_matched_by_gps AS (
 ),
 
 magasins_gps_dedup AS (
-  SELECT DISTINCT
+  SELECT
     magasin_id,
     nom_magasin,
     latitude_originale,
@@ -193,6 +195,7 @@ magasins_gps_dedup AS (
     commune_nom_from_gps,
     distance_gps_vs_commune
   FROM magasins_matched_by_gps
+  QUALIFY ROW_NUMBER() OVER (PARTITION BY magasin_id, source_system ORDER BY loaded_at DESC, nom_magasin ASC) = 1
 ),
 
 -- Étape 5 : Validation et correction
