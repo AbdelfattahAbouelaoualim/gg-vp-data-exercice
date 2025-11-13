@@ -350,14 +350,6 @@ jobs:
         run: |
           dbt docs generate --target prod
 
-      - name: Create deployment tag
-        if: success()
-        run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-          git tag -a "deploy-$(date +%Y%m%d-%H%M%S)" -m "Production deployment"
-          git push origin --tags
-
       - name: Notify deployment success
         if: success()
         run: |
