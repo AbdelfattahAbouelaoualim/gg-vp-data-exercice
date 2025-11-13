@@ -107,7 +107,7 @@ dbt show --select gps_correction_impact
 
 **`models/marts/dim_magasin.sql`** :
 - Upstream modifié (dédoublonnage inclus)
-- Volumétrie : 216,806 stores (vs 220,833 avant)
+- Volumétrie : 62,356 stores (vs 220,833 avant)
 
 #### Configuration
 
@@ -191,7 +191,7 @@ WHERE nom_magasin LIKE '%FNAC MONTPARNASSE%';
 
 | Métrique | Valeur | Amélioration |
 |----------|--------|--------------|
-| Magasins total | 216,806 | -1.82% (dédoublonnage) |
+| Magasins total | 62,356 | -71.5% (GPS invalides filtrés + dédoublonnage) |
 | GPS corrigés | 30.4% | 19,857 stores auto-corrigés |
 | GPS validés OK | 19.1% | 12,479 stores fiables |
 | Confiance analyses géo | **Haute** | Coords INSEE fiables |

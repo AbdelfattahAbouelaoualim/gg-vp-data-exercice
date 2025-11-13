@@ -91,7 +91,7 @@ Construire une **dimension magasin unique et historisée** (SCD Type 2) dans le 
                     ┌─────────────────▼──────────────-───┐
                     │       dbt Marts Layer              │
                     │    dim_magasin (SCD Type 2)        │
-                    │  215,828 stores enrichis           │
+                    │  62,356 stores enrichis            │
                     │  valid_from | valid_to | is_current│
                     └─────────────────┬────────────────-─┘
                                       │
